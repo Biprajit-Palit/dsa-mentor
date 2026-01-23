@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial; width: 300px; }
+    .hidden { display: none; }
+    button { margin-top: 5px; }
+  </style>
+</head>
+<body>
+  <p id="confidence">Confidence: LOW</p>
+  <p id="hintCount">Hints used: 0/3</p>
+  <hr />
+
+  <!-- THINKING -->
+  <div id="thinking">
+    <h3>Thinking Mode</h3>
+    <p id="timer">Time left: 2:00</p>
+    <button id="startThinking">Start</button>
+    <button id="skipThinking">Skip Once</button>
+    <button id="explainBtn" class="hidden">Explain Approach</button>
+  </div>
+
+  <!-- INPUT -->
+  <div id="input" class="hidden">
+    <h3>Your Approach</h3>
+    <textarea id="thoughtInput" rows="4"></textarea>
+    <button id="submitThought">Submit</button>
+  </div>
+
+  <!-- FEEDBACK -->
+  <div id="feedback" class="hidden">
+    <h3>Feedback</h3>
+    <p id="feedbackText"></p>
+    <button id="askHint">Ask Hint</button>
+    <button id="reviseThought">Revise Approach</button>
+  </div>
+
+  <!-- REWARD -->
+  <div id="reward" class="hidden">
+    <h3>Choose a reward</h3>
+    <button class="rewardOption">Structural Hint</button>
+    <button class="rewardOption">Pseudo Logic</button>
+    <button class="rewardOption">Edge Cases</button>
+    <button class="rewardOption">Complexity</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
