@@ -1,36 +1,19 @@
+/**************** AI CALLS ****************/
+
 async function evaluateThoughtWithAI(userThought) {
   try {
-    const response = await fetch(
-      "https://dsa-mentor-worker.biprajit.workers.dev",
+    const res = await fetch(
+      "https://dsa-mentor-worker.biprajit.workers.dev/evaluate",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [
-            { role: "system", content: "Evaluate explanation" },
-            { role: "user", content: userThought }
-          ]
-        })
+        body: JSON.stringify({ explanation: userThought })
       }
     );
 
-    const data = await response.json();
-
-    if (
-      !data ||
-      !data.choices ||
-      !data.choices[0] ||
-      !data.choices[0].message ||
-      !data.choices[0].message.content
-    ) {
-      throw new Error("Invalid AI response shape");
-    }
-
-    const raw = data.choices[0].message.content;
-    return JSON.parse(raw);
-
+    return await res.json();
   } catch (err) {
-    console.error("AI evaluation failed:", err);
+    console.error("Evaluation failed", err);
     return {
       verdict: "WRONG",
       confidence_delta: 0,
@@ -40,8 +23,24 @@ async function evaluateThoughtWithAI(userThought) {
   }
 }
 
+async function fetchHint(hintType) {
+  try {
+    const res = await fetch(
+      "https://dsa-mentor-worker.biprajit.workers.dev/hint",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hint_type: hintType })
+      }
+    );
 
-
+    const data = await res.json();
+    return data.hint;
+  } catch (err) {
+    console.error("Hint fetch failed", err);
+    return "Hint unavailable right now.";
+  }
+}
 /*************** UI STATE ****************/
 
 const thinking = document.getElementById("thinking");
