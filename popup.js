@@ -1,5 +1,3 @@
-/**************** AI CALLS ****************/
-
 async function evaluateThoughtWithAI(userThought) {
   try {
     const res = await fetch(
@@ -11,7 +9,10 @@ async function evaluateThoughtWithAI(userThought) {
       }
     );
 
-    return await res.json();
+    const data = await res.json();
+    console.log("AI RESPONSE FROM BACKEND:", data); // 👈 ADD THIS
+
+    return data;
   } catch (err) {
     console.error("Evaluation failed", err);
     return {
@@ -23,24 +24,10 @@ async function evaluateThoughtWithAI(userThought) {
   }
 }
 
-async function fetchHint(hintType) {
-  try {
-    const res = await fetch(
-      "https://dsa-mentor-worker.biprajit.workers.dev/hint",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hint_type: hintType })
-      }
-    );
 
-    const data = await res.json();
-    return data.hint;
-  } catch (err) {
-    console.error("Hint fetch failed", err);
-    return "Hint unavailable right now.";
-  }
-}
+
+
+
 /*************** UI STATE ****************/
 
 const thinking = document.getElementById("thinking");
@@ -110,10 +97,7 @@ function render() {
   document.getElementById("askHint").disabled =
     state.hintsUsed >= 3 || state.effortGateActive;
 
-  if (state.phase === "FEEDBACK" && state.effortGateActive) {
-    document.getElementById("feedbackText").innerText =
-      "Use the hint and try implementing before asking another.";
-  }
+
 }
 
 /*************** EVENTS ****************/
@@ -161,6 +145,9 @@ document.getElementById("askHint").onclick = () => {
   state.hintsUsed++;
   state.effortGateActive = true;
   alert("Limited Hint #" + state.hintsUsed);
+    const feedbackText = document.getElementById("feedbackText");
+  feedbackText.innerText =
+    "Use the hint and try implementing before asking another.";
   state.phase = "FEEDBACK";
   render();
 };
