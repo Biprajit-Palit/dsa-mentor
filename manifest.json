@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "name": "DSA Mentor",
-  "version": "0.1",
+  "version": "0.2",
+  "permissions": ["storage", "tabs"],
   "action": { "default_popup": "popup.html" },
   "content_scripts": [
     {
@@ -10,8 +11,6 @@
     }
   ],
   "background": {
-  "service_worker": "background.js"
-}
-
-  
+    "service_worker": "background.js"
+  }
 }
