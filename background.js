@@ -72,33 +72,48 @@ function unlockEffortGate() {
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  console.log("📨 Background received:", msg.type, msg);
+  
   // From content.js
   if (msg.type === "EDITOR_TYPING" && effortState.effortGateActive) {
+    console.log("⌨️ Typing detected, starting timer");
     startEffortTimer();
   }
 
-  if (msg.type === "RUN_CLICK" && effortState.effortGateActive) {
-    effortState.runCount++;
-    saveState();
+  if (msg.type === "RUN_CLICK") {
+    console.log("🏃 RUN_CLICK received. Gate active?", effortState.effortGateActive, "Count:", effortState.runCount);
     
-    // Notify popup
-    chrome.runtime.sendMessage({ 
-      type: "RUN_COUNT_UPDATE", 
-      runCount: effortState.runCount 
-    }).catch(() => {});
-    
-    if (effortState.runCount >= 2) {
-      unlockEffortGate();
+    if (effortState.effortGateActive) {
+      effortState.runCount++;
+      saveState();
+      
+      console.log("✅ Run count increased to:", effortState.runCount);
+      
+      // Notify popup
+      chrome.runtime.sendMessage({ 
+        type: "RUN_COUNT_UPDATE", 
+        runCount: effortState.runCount 
+      }).catch(() => {});
+      
+      if (effortState.runCount >= 2) {
+        console.log("🎉 2 runs reached! Unlocking gate");
+        unlockEffortGate();
+      }
+    } else {
+      console.log("⚠️ Effort gate not active, ignoring run click");
     }
   }
 
   // From popup.js
   if (msg.type === "START_EFFORT_GATE") {
+    console.log("🔒 START_EFFORT_GATE received");
     effortState.effortGateActive = true;
     effortState.effortTimeLeft = 120;
     effortState.runCount = 0;
     saveState();
     startEffortTimer();
+    console.log("✅ Effort gate activated:", effortState);
+    sendResponse({ success: true });
   }
 
   if (msg.type === "GET_EFFORT_STATE") {

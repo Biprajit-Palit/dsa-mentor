@@ -206,8 +206,13 @@ document.getElementById("askHint").onclick = () => {
 
   state.hintsUsed++;
   
+  console.log("🎁 Hint requested. Activating effort gate...");
+  
   // Activate effort gate in background
-  chrome.runtime.sendMessage({ type: "START_EFFORT_GATE" });
+  chrome.runtime.sendMessage({ type: "START_EFFORT_GATE" }, (response) => {
+    console.log("✅ Effort gate activation response:", response);
+  });
+  
   effortState.effortGateActive = true;
   effortState.effortTimeLeft = 120;
   effortState.runCount = 0;
