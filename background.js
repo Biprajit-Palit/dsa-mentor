@@ -11,7 +11,10 @@ let appState = {
   hintsUsed: 0,
   skipUsed: false,
   thinkingTimeLeft: 120,
-  currentProblem: null // Track which problem we're on
+  currentProblem: null, // Track which problem we're on
+  problemTitle: "",
+  problemDescription: "",
+  userExplanation: "" // Store for hint context
 };
 
 let effortInterval = null;
@@ -102,6 +105,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     } else {
       console.log("⚠️ Effort gate not active, ignoring run click");
     }
+  }
+
+  // Store problem info from content.js
+  if (msg.type === "PROBLEM_INFO") {
+    appState.problemTitle = msg.title;
+    appState.problemDescription = msg.description;
+    saveState();
+    console.log("📝 Problem info stored:", msg.title);
   }
 
   // From popup.js

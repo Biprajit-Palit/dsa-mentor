@@ -51,33 +51,131 @@ JSON format:
           }
         );
 
+        if (!openaiRes.ok) {
+          const errorText = await openaiRes.text();
+          console.error("OpenAI API error:", openaiRes.status, errorText);
+          return new Response(JSON.stringify({
+            verdict: "WRONG",
+            confidence_delta: 0,
+            feedback: `OpenAI API error: ${openaiRes.status}. Check your API key and credits.`,
+            allowed_hint_types: []
+          }), {
+            status: 200,
+            headers: {
+              ...corsHeaders(),
+              "Content-Type": "application/json"
+            }
+          });
+        }
+
         const data = await openaiRes.json();
+        
+        if (!data.choices || !data.choices[0]) {
+          console.error("Invalid OpenAI response:", data);
+          return new Response(JSON.stringify({
+            verdict: "WRONG",
+            confidence_delta: 0,
+            feedback: "OpenAI returned invalid response. Check API configuration.",
+            allowed_hint_types: []
+          }), {
+            status: 200,
+            headers: {
+              ...corsHeaders(),
+              "Content-Type": "application/json"
+            }
+          });
+        }
+        
         let raw = data.choices[0].message.content;
 
+        // Clean and validate JSON
         raw = raw.replace(/```json|```/g, "").trim();
-
-        return new Response(raw, {
-          headers: {
-            ...corsHeaders(),
-            "Content-Type": "application/json"
+        
+        // Try to parse and validate
+        try {
+          const parsed = JSON.parse(raw);
+          
+          // Ensure required fields exist
+          if (!parsed.feedback) {
+            parsed.feedback = "Evaluation completed.";
           }
-        });
+          if (parsed.verdict === undefined) {
+            parsed.verdict = "PARTIAL";
+          }
+          if (parsed.confidence_delta === undefined) {
+            parsed.confidence_delta = 0;
+          }
+          if (!parsed.allowed_hint_types) {
+            parsed.allowed_hint_types = [];
+          }
+          
+          return new Response(JSON.stringify(parsed), {
+            headers: {
+              ...corsHeaders(),
+              "Content-Type": "application/json"
+            }
+          });
+        } catch (parseErr) {
+          // If parsing fails, return a safe default
+          console.error("JSON parse error:", parseErr, "Raw:", raw);
+          return new Response(JSON.stringify({
+            verdict: "PARTIAL",
+            confidence_delta: 0,
+            feedback: "Evaluation completed but response format was invalid.",
+            allowed_hint_types: []
+          }), {
+            headers: {
+              ...corsHeaders(),
+              "Content-Type": "application/json"
+            }
+          });
+        }
       }
 
       // ---------- /hint ----------
       if (url.pathname === "/hint" && request.method === "POST") {
-        const { hint_type } = await request.json();
+        const { hint_type, problem_title, problem_description, user_explanation } = await request.json();
 
         const systemPrompt = `
-You generate ONLY hints, never solutions.
+You are a DSA mentor providing ORTHOGONAL hints. Your goal is to guide thinking WITHOUT giving away the solution.
 
-Hint type: ${hint_type}
+CRITICAL RULES:
+- NEVER provide code or pseudocode
+- NEVER reveal the complete algorithm
+- Each hint type provides a DIFFERENT angle of understanding
+- Hints are NON-PROGRESSIVE (they don't build toward a solution)
+- Keep hints to 2-3 sentences maximum
+- Be specific to THIS problem, not generic
 
-Rules:
-- Be orthogonal (do not stack toward solution)
-- No code
-- No final logic
-- 1–2 sentences max
+Problem: ${problem_title}
+Description: ${problem_description?.substring(0, 500)}
+User's approach so far: ${user_explanation || "Not provided yet"}
+
+Hint type requested: ${hint_type}
+
+HINT TYPE GUIDELINES:
+
+Structural Hint:
+- Suggest a data structure or high-level pattern
+- Example: "Consider using a hash map to track seen values"
+- DON'T reveal the complete traversal strategy
+
+Pseudo Logic:
+- Describe a conceptual flow WITHOUT implementation details
+- Example: "Think about what you need to remember as you iterate"
+- DON'T provide step-by-step pseudocode
+
+Edge Cases:
+- Point out special scenarios the solution must handle
+- Example: "What happens when the array has duplicate values?"
+- DON'T explain how to handle them
+
+Complexity:
+- Discuss time/space trade-offs
+- Example: "You can achieve O(n) time if you use O(n) extra space"
+- DON'T reveal which data structure achieves this
+
+Generate a focused, orthogonal hint based on the type requested.
 `;
 
         const openaiRes = await fetch(
@@ -90,13 +188,45 @@ Rules:
             },
             body: JSON.stringify({
               model: "gpt-4o-mini",
-              messages: [{ role: "system", content: systemPrompt }],
-              temperature: 0.4
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: `Give me a ${hint_type}` }
+              ],
+              temperature: 0.7,
+              max_tokens: 150
             })
           }
         );
 
+        if (!openaiRes.ok) {
+          const errorText = await openaiRes.text();
+          console.error("OpenAI API error:", openaiRes.status, errorText);
+          return new Response(JSON.stringify({
+            hint: `OpenAI API error: ${openaiRes.status}. Check your API key and credits.`
+          }), {
+            status: 200,
+            headers: {
+              ...corsHeaders(),
+              "Content-Type": "application/json"
+            }
+          });
+        }
+
         const data = await openaiRes.json();
+        
+        if (!data.choices || !data.choices[0]) {
+          console.error("Invalid OpenAI response:", data);
+          return new Response(JSON.stringify({
+            hint: "OpenAI returned invalid response. Check API configuration."
+          }), {
+            status: 200,
+            headers: {
+              ...corsHeaders(),
+              "Content-Type": "application/json"
+            }
+          });
+        }
+        
         const hint = data.choices[0].message.content.trim();
 
         return new Response(

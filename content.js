@@ -12,6 +12,35 @@ document.addEventListener("keydown", () => {
   }, 1000); // at most once per second
 });
 
+// ---------- PROBLEM EXTRACTION ----------
+function extractProblemInfo() {
+  // Try to find problem title
+  const titleElement = document.querySelector('[data-cy="question-title"]') || 
+                       document.querySelector('div[class*="title"]') ||
+                       document.querySelector('h1');
+  
+  // Try to find problem description
+  const descElement = document.querySelector('[class*="elfjS"]') || // LeetCode's description class
+                      document.querySelector('[data-track-load="description_content"]') ||
+                      document.querySelector('.question-content');
+  
+  const title = titleElement?.innerText?.trim() || "Unknown Problem";
+  const description = descElement?.innerText?.trim().substring(0, 1500) || ""; // Limit length
+  
+  console.log("📝 Extracted problem:", title);
+  
+  return { title, description };
+}
+
+// Send problem info to background when page loads
+setTimeout(() => {
+  const problemInfo = extractProblemInfo();
+  chrome.runtime.sendMessage({ 
+    type: "PROBLEM_INFO", 
+    ...problemInfo 
+  });
+}, 2000); // Wait for LeetCode to load
+
 // ---------- RUN BUTTON DETECTION ----------
 const attachedButtons = new WeakSet();
 

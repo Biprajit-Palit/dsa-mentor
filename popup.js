@@ -23,6 +23,36 @@ async function evaluateThoughtWithAI(userThought) {
   }
 }
 
+async function generateHintWithAI(hintType) {
+  try {
+    // Get problem info from background
+    const appState = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: "GET_APP_STATE" }, resolve);
+    });
+
+    const res = await fetch(
+      "https://dsa-mentor-worker.biprajit.workers.dev/hint",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          hint_type: hintType,
+          problem_title: appState.problemTitle,
+          problem_description: appState.problemDescription,
+          user_explanation: appState.userExplanation
+        })
+      }
+    );
+
+    const data = await res.json();
+    console.log("AI HINT RESPONSE:", data);
+    return data.hint || "Unable to generate hint.";
+  } catch (err) {
+    console.error("Hint generation failed", err);
+    return "Unable to generate hint at this time.";
+  }
+}
+
 /*************** UI STATE ****************/
 
 const thinking = document.getElementById("thinking");
@@ -145,7 +175,7 @@ function render() {
     const m = Math.floor(effortState.effortTimeLeft / 60);
     const s = effortState.effortTimeLeft % 60;
     effortStatus.innerHTML = `
-      🔒 <strong>Effort Gate Active</strong><br>
+       <strong>Effort Gate Active</strong><br>
       Code for ${m}:${s.toString().padStart(2, "0")} 
       OR run code ${effortState.runCount}/2 times
     `;
@@ -187,6 +217,12 @@ document.getElementById("submitThought").onclick = async () => {
 
   const ai = await evaluateThoughtWithAI(text);
 
+  // Store user's explanation for hint context
+  chrome.runtime.sendMessage({ 
+    type: "UPDATE_APP_STATE", 
+    updates: { userExplanation: text }
+  });
+
   if (ai.confidence_delta === 1 && state.confidence === "LOW")
     state.confidence = "MEDIUM";
   else if (ai.confidence_delta === 1 && state.confidence === "MEDIUM")
@@ -201,12 +237,21 @@ document.getElementById("submitThought").onclick = async () => {
   render();
 };
 
-document.getElementById("askHint").onclick = () => {
+document.getElementById("askHint").onclick = async () => {
   if (state.hintsUsed >= 3 || effortState.effortGateActive) return;
 
   state.hintsUsed++;
   
   console.log("🎁 Hint requested. Activating effort gate...");
+  
+  const feedbackText = document.getElementById("feedbackText");
+  feedbackText.innerText = "Generating hint...";
+  
+  // Generate a random hint type for on-demand hints
+  const hintTypes = ["Structural Hint", "Pseudo Logic", "Edge Cases", "Complexity"];
+  const randomHint = hintTypes[Math.floor(Math.random() * hintTypes.length)];
+  
+  const hint = await generateHintWithAI(randomHint);
   
   // Activate effort gate in background
   chrome.runtime.sendMessage({ type: "START_EFFORT_GATE" }, (response) => {
@@ -217,11 +262,7 @@ document.getElementById("askHint").onclick = () => {
   effortState.effortTimeLeft = 120;
   effortState.runCount = 0;
   
-  alert("Limited Hint #" + state.hintsUsed);
-  
-  const feedbackText = document.getElementById("feedbackText");
-  feedbackText.innerText =
-    "Use the hint and try implementing before asking another.";
+  feedbackText.innerHTML = `<strong>💡 Hint #${state.hintsUsed}: ${randomHint}</strong><br><br>${hint}<br><br><em>Use the hint and implement before asking another.</em>`;
   state.phase = "FEEDBACK";
   
   saveState();
@@ -235,11 +276,22 @@ document.getElementById("reviseThought").onclick = () => {
 };
 
 document.querySelectorAll(".rewardOption").forEach(btn => {
-  btn.onclick = () => {
-    alert(btn.innerText + " unlocked");
+  btn.onclick = async () => {
+    const hintType = btn.innerText; // "Structural Hint", "Pseudo Logic", etc.
+    
+    btn.disabled = true;
+    btn.innerText = "Generating...";
+    
+    const hint = await generateHintWithAI(hintType);
+    
+    // Show hint in feedback section
+    const feedbackText = document.getElementById("feedbackText");
+    feedbackText.innerHTML = `<strong> ${hintType}</strong><br><br>${hint}`;
+    
     state.confidence = "MEDIUM";
     state.phase = "FEEDBACK";
-    saveState();
+    
+    await saveState();
     render();
   };
 });
