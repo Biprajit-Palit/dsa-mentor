@@ -93,7 +93,7 @@ async function loadState() {
         url: tabs[0].url 
       }, (response) => {
         if (response?.reset) {
-          console.log("🆕 State reset for new problem");
+          console.log(" State reset for new problem");
         }
         
         // Load current state
@@ -301,7 +301,7 @@ document.querySelectorAll(".rewardOption").forEach(btn => {
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === "EFFORT_UNLOCKED") {
     effortState.effortGateActive = false;
-    alert("✅ Effort gate unlocked! You can ask another hint.");
+    alert(" Effort gate unlocked! You can ask another hint.");
     render();
   }
   
@@ -321,3 +321,55 @@ chrome.runtime.onMessage.addListener((msg) => {
   await loadState();
   render();
 })();
+/*************** HIDDEN ADMIN RESET (Ctrl+Shift+R) ****************/
+
+document.addEventListener("keydown", (e) => {
+  // Ctrl+Shift+R (Windows/Linux) or Cmd+Shift+R (Mac)
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "R") {
+    e.preventDefault();
+    
+    // Confirm before resetting
+    const confirmed = confirm(" ADMIN: Reset this problem's state?");
+    
+    if (confirmed) {
+      // Reset to fresh state
+      state = {
+        phase: "THINKING",
+        confidence: "LOW",
+        hintsUsed: 0,
+        skipUsed: false,
+        thinkingTimeLeft: 120
+      };
+      
+      effortState = {
+        effortGateActive: false,
+        effortTimeLeft: 120,
+        runCount: 0
+      };
+      
+      // Clear timer
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      
+      // Update background
+      chrome.runtime.sendMessage({ 
+        type: "UPDATE_APP_STATE", 
+        updates: { 
+          phase: "THINKING",
+          confidence: "LOW",
+          hintsUsed: 0,
+          skipUsed: false,
+          thinkingTimeLeft: 120,
+          userExplanation: "",
+          lastAttemptTimestamp: null
+        }
+      });
+      
+      console.log("🔧 ADMIN RESET: State cleared");
+      alert(" State reset! Problem is fresh.");
+      render();
+    }
+  }
+});

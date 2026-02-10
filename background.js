@@ -1,3 +1,8 @@
+// ============================================
+// CONFIGURATION - Adjust reset period here
+// ============================================
+const RESET_AFTER_DAYS = 1; // Reset state after 1 day (change to 7 for weekly, etc.)
+
 // Persistent state stored in chrome.storage
 let effortState = {
   effortGateActive: false,
@@ -14,7 +19,8 @@ let appState = {
   currentProblem: null, // Track which problem we're on
   problemTitle: "",
   problemDescription: "",
-  userExplanation: "" // Store for hint context
+  userExplanation: "", // Store for hint context
+  lastAttemptTimestamp: null // Track when user last worked on this problem
 };
 
 let effortInterval = null;
@@ -34,6 +40,17 @@ chrome.storage.local.get(['effortState', 'appState'], (result) => {
 function getProblemSlug(url) {
   const match = url.match(/leetcode\.com\/problems\/([^\/]+)/);
   return match ? match[1] : null;
+}
+
+// Helper to check if state should reset based on time
+function shouldResetByTime(lastTimestamp) {
+  // MIGRATION: If no timestamp exists (old data), assume it's old and should reset
+  if (!lastTimestamp) return true; // ← Changed to true for migration
+  
+  const now = Date.now();
+  const daysSince = (now - lastTimestamp) / (1000 * 60 * 60 * 24);
+  
+  return daysSince >= RESET_AFTER_DAYS;
 }
 
 function saveState() {
@@ -121,6 +138,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     effortState.effortGateActive = true;
     effortState.effortTimeLeft = 120;
     effortState.runCount = 0;
+    
+    // Update timestamp when user actively works on problem
+    appState.lastAttemptTimestamp = Date.now();
+    
     saveState();
     startEffortTimer();
     console.log("✅ Effort gate activated:", effortState);
@@ -137,6 +158,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === "UPDATE_APP_STATE") {
     appState = { ...appState, ...msg.updates };
+    
+    // Update timestamp whenever state changes (user is actively working)
+    appState.lastAttemptTimestamp = Date.now();
+    
     saveState();
     sendResponse({ success: true });
   }
@@ -145,8 +170,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "CHECK_PROBLEM") {
     const newProblem = getProblemSlug(msg.url);
     
+    // Case 1: Different problem - always reset
     if (newProblem && newProblem !== appState.currentProblem) {
-      // New problem detected - reset state
       console.log(`🔄 New problem detected: ${newProblem}`);
       
       appState = {
@@ -155,7 +180,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         hintsUsed: 0,
         skipUsed: false,
         thinkingTimeLeft: 120,
-        currentProblem: newProblem
+        currentProblem: newProblem,
+        problemTitle: "",
+        problemDescription: "",
+        userExplanation: "",
+        lastAttemptTimestamp: Date.now()
       };
       
       effortState = {
@@ -165,8 +194,37 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       };
       
       saveState();
-      sendResponse({ reset: true, problem: newProblem });
-    } else {
+      sendResponse({ reset: true, reason: "new_problem", problem: newProblem });
+    }
+    // Case 2: Same problem - check if enough time has passed
+    else if (newProblem && shouldResetByTime(appState.lastAttemptTimestamp)) {
+      const daysSince = ((Date.now() - appState.lastAttemptTimestamp) / (1000 * 60 * 60 * 24)).toFixed(1);
+      console.log(`⏰ Time-based reset: ${daysSince} days since last attempt`);
+      
+      appState = {
+        phase: "THINKING",
+        confidence: "LOW",
+        hintsUsed: 0,
+        skipUsed: false,
+        thinkingTimeLeft: 120,
+        currentProblem: newProblem,
+        problemTitle: appState.problemTitle,
+        problemDescription: appState.problemDescription,
+        userExplanation: "",
+        lastAttemptTimestamp: Date.now()
+      };
+      
+      effortState = {
+        effortGateActive: false,
+        effortTimeLeft: 120,
+        runCount: 0
+      };
+      
+      saveState();
+      sendResponse({ reset: true, reason: "time_based", daysSince, problem: newProblem });
+    }
+    // Case 3: Same problem, within time limit - keep state
+    else {
       sendResponse({ reset: false, problem: newProblem });
     }
   }
