@@ -1,11 +1,14 @@
-async function evaluateThoughtWithAI(userThought) {
+async function evaluateThoughtWithAI(userThought, explanationHistory = []) {
   try {
     const res = await fetch(
       "https://dsa-mentor-worker.biprajit.workers.dev/evaluate",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ explanation: userThought })
+        body: JSON.stringify({ 
+          explanation: userThought,
+          explanation_history: explanationHistory
+        })
       }
     );
 
@@ -93,7 +96,7 @@ async function loadState() {
         url: tabs[0].url 
       }, (response) => {
         if (response?.reset) {
-          console.log(" State reset for new problem");
+          console.log("🆕 State reset for new problem");
         }
         
         // Load current state
@@ -215,20 +218,37 @@ document.getElementById("submitThought").onclick = async () => {
   state.phase = "FEEDBACK";
   render();
 
-  const ai = await evaluateThoughtWithAI(text);
-
-  // Store user's explanation for hint context
-  chrome.runtime.sendMessage({ 
-    type: "UPDATE_APP_STATE", 
-    updates: { userExplanation: text }
+  // Get current explanation history from background
+  const appState = await new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: "GET_APP_STATE" }, resolve);
   });
+  
+  const explanationHistory = appState.explanationHistory || [];
+  
+  // Evaluate with history to check for duplicates
+  const ai = await evaluateThoughtWithAI(text, explanationHistory);
 
-  if (ai.confidence_delta === 1 && state.confidence === "LOW")
-    state.confidence = "MEDIUM";
-  else if (ai.confidence_delta === 1 && state.confidence === "MEDIUM")
-    state.confidence = "HIGH";
-  else if (ai.confidence_delta === -1 && state.confidence === "HIGH")
-    state.confidence = "MEDIUM";
+  // If not a duplicate, add to history and update state
+  if (ai.verdict !== "DUPLICATE") {
+    explanationHistory.push(text);
+    
+    // Store user's explanation for hint context and add to history
+    chrome.runtime.sendMessage({ 
+      type: "UPDATE_APP_STATE", 
+      updates: { 
+        userExplanation: text,
+        explanationHistory: explanationHistory
+      }
+    });
+
+    // Update confidence based on AI response
+    if (ai.confidence_delta === 1 && state.confidence === "LOW")
+      state.confidence = "MEDIUM";
+    else if (ai.confidence_delta === 1 && state.confidence === "MEDIUM")
+      state.confidence = "HIGH";
+    else if (ai.confidence_delta === -1 && state.confidence === "HIGH")
+      state.confidence = "MEDIUM";
+  }
 
   feedbackText.innerText = ai.feedback;
   state.phase = state.confidence === "HIGH" ? "REWARD" : "FEEDBACK";
@@ -301,7 +321,7 @@ document.querySelectorAll(".rewardOption").forEach(btn => {
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === "EFFORT_UNLOCKED") {
     effortState.effortGateActive = false;
-    alert(" Effort gate unlocked! You can ask another hint.");
+    alert("✅ Effort gate unlocked! You can ask another hint.");
     render();
   }
   
@@ -329,7 +349,7 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     
     // Confirm before resetting
-    const confirmed = confirm(" ADMIN: Reset this problem's state?");
+    const confirmed = confirm("🔧 ADMIN: Reset this problem's state?");
     
     if (confirmed) {
       // Reset to fresh state
@@ -363,12 +383,13 @@ document.addEventListener("keydown", (e) => {
           skipUsed: false,
           thinkingTimeLeft: 120,
           userExplanation: "",
-          lastAttemptTimestamp: null
+          lastAttemptTimestamp: null,
+          explanationHistory: [] // Clear history on manual reset
         }
       });
       
       console.log("🔧 ADMIN RESET: State cleared");
-      alert(" State reset! Problem is fresh.");
+      alert("✅ State reset! Problem is fresh.");
       render();
     }
   }

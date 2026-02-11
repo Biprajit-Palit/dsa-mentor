@@ -20,7 +20,8 @@ let appState = {
   problemTitle: "",
   problemDescription: "",
   userExplanation: "", // Store for hint context
-  lastAttemptTimestamp: null // Track when user last worked on this problem
+  lastAttemptTimestamp: null, // Track when user last worked on this problem
+  explanationHistory: [] // Track all submitted explanations to prevent spam
 };
 
 let effortInterval = null;
@@ -184,7 +185,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         problemTitle: "",
         problemDescription: "",
         userExplanation: "",
-        lastAttemptTimestamp: Date.now()
+        lastAttemptTimestamp: Date.now(),
+        explanationHistory: [] // Clear history on new problem
       };
       
       effortState = {
@@ -211,7 +213,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         problemTitle: appState.problemTitle,
         problemDescription: appState.problemDescription,
         userExplanation: "",
-        lastAttemptTimestamp: Date.now()
+        lastAttemptTimestamp: Date.now(),
+        explanationHistory: [] // Clear history on time-based reset
       };
       
       effortState = {
