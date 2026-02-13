@@ -260,18 +260,41 @@ document.getElementById("submitThought").onclick = async () => {
 document.getElementById("askHint").onclick = async () => {
   if (state.hintsUsed >= 3 || effortState.effortGateActive) return;
 
-  state.hintsUsed++;
-  
   console.log("🎁 Hint requested. Activating effort gate...");
   
   const feedbackText = document.getElementById("feedbackText");
   feedbackText.innerText = "Generating hint...";
   
-  // Generate a random hint type for on-demand hints
-  const hintTypes = ["Structural Hint", "Pseudo Logic", "Edge Cases", "Complexity"];
-  const randomHint = hintTypes[Math.floor(Math.random() * hintTypes.length)];
+  // Get current state to check used hint types
+  const appState = await new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: "GET_APP_STATE" }, resolve);
+  });
+  
+  const usedHintTypes = appState.usedHintTypes || [];
+  
+  // Filter out already used hint types
+  const allHintTypes = ["Structural Hint", "Pseudo Logic", "Edge Cases", "Complexity"];
+  const availableHintTypes = allHintTypes.filter(type => !usedHintTypes.includes(type));
+  
+  // If all types used, show error
+  if (availableHintTypes.length === 0) {
+    feedbackText.innerHTML = `<strong>⚠️ All hint types already used!</strong><br><br>You've received all 4 types of hints. Try implementing what you've learned.`;
+    return;
+  }
+  
+  // Pick random from available types
+  const randomHint = availableHintTypes[Math.floor(Math.random() * availableHintTypes.length)];
+  
+  state.hintsUsed++;
   
   const hint = await generateHintWithAI(randomHint);
+  
+  // Add this hint type to used list
+  usedHintTypes.push(randomHint);
+  chrome.runtime.sendMessage({ 
+    type: "UPDATE_APP_STATE", 
+    updates: { usedHintTypes }
+  });
   
   // Activate effort gate in background
   chrome.runtime.sendMessage({ type: "START_EFFORT_GATE" }, (response) => {
@@ -299,14 +322,33 @@ document.querySelectorAll(".rewardOption").forEach(btn => {
   btn.onclick = async () => {
     const hintType = btn.innerText; // "Structural Hint", "Pseudo Logic", etc.
     
+    // Check if this hint type was already used
+    const appState = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: "GET_APP_STATE" }, resolve);
+    });
+    
+    const usedHintTypes = appState.usedHintTypes || [];
+    
+    if (usedHintTypes.includes(hintType)) {
+      alert(`⚠️ You already received a "${hintType}" hint! Choose a different type.`);
+      return;
+    }
+    
     btn.disabled = true;
     btn.innerText = "Generating...";
     
     const hint = await generateHintWithAI(hintType);
     
+    // Add to used hint types
+    usedHintTypes.push(hintType);
+    chrome.runtime.sendMessage({ 
+      type: "UPDATE_APP_STATE", 
+      updates: { usedHintTypes }
+    });
+    
     // Show hint in feedback section
     const feedbackText = document.getElementById("feedbackText");
-    feedbackText.innerHTML = `<strong> ${hintType}</strong><br><br>${hint}`;
+    feedbackText.innerHTML = `<strong>🎁 ${hintType}</strong><br><br>${hint}`;
     
     state.confidence = "MEDIUM";
     state.phase = "FEEDBACK";
@@ -384,7 +426,8 @@ document.addEventListener("keydown", (e) => {
           thinkingTimeLeft: 120,
           userExplanation: "",
           lastAttemptTimestamp: null,
-          explanationHistory: [] // Clear history on manual reset
+          explanationHistory: [], // Clear history on manual reset
+          usedHintTypes: [] // Clear used hint types
         }
       });
       
